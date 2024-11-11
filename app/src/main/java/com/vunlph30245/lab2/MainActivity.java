@@ -1,5 +1,7 @@
 package com.vunlph30245.lab2;
 
+import android.app.AlertDialog;
+import android.content.DialogInterface;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
@@ -32,7 +34,7 @@ public class MainActivity extends AppCompatActivity {
         EdgeToEdge.enable(this);
         setContentView(R.layout.activity_main);
 
-        initView();  // Thêm initView() ở đây để khởi tạo RecyclerView
+        initView();
 
         dao = new ToDoDAO(this);
         listSanPham = dao.getListSanPham();
@@ -78,6 +80,23 @@ public class MainActivity extends AppCompatActivity {
                     rcvSanPham.setAdapter(adapter);
                     reset();
                 }
+            }
+        });
+        edtType.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                String[] arrType = {"De", "Trung binh", "Kho"};
+                AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this);
+                builder.setTitle("Vui long chon");
+                builder.setIcon(R.drawable.pencil);
+                builder.setItems(arrType, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        edtType.setText(arrType[which]);
+                    }
+                });
+                AlertDialog alertDialog = builder.create();
+                alertDialog.show();
             }
         });
     }
