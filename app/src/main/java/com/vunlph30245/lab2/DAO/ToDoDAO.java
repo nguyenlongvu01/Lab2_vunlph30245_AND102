@@ -55,7 +55,8 @@ public class ToDoDAO {
             Cursor cursor = database.rawQuery("SELECT * FROM TASK", null);
             if (cursor.moveToFirst()) {
                 do {
-                    int id = cursor.getInt(cursor.getColumnIndexOrThrow("ID"));
+                    // Lấy id là int từ Cursor, sau đó chuyển thành String
+                    String id = String.valueOf(cursor.getInt(cursor.getColumnIndexOrThrow("ID")));
                     String title = cursor.getString(cursor.getColumnIndexOrThrow("TITLE"));
                     String content = cursor.getString(cursor.getColumnIndexOrThrow("CONTENT"));
                     String date = cursor.getString(cursor.getColumnIndexOrThrow("DATE"));
@@ -75,18 +76,21 @@ public class ToDoDAO {
     }
 
 
-    public boolean removeTodo(int id) {
-        int row = database.delete("TASK", "ID=?", new String[]{String.valueOf(id)});
+
+    // Hàm xóa Todo
+    public boolean removeTodo(String id) {
+        int row = database.delete("TASK", "ID=?", new String[]{id});  // id đã là String
         return row > 0;
     }
 
-
-    public boolean updateStatus(int id, boolean isChecked) {
+    // Hàm cập nhật trạng thái Todo
+    public boolean updateStatus(String id, boolean isChecked) {
         int status = isChecked ? 1 : 0;
         ContentValues values = new ContentValues();
         values.put("STATUS", status);
-        int row = database.update("TASK", values, "ID=?", new String[]{String.valueOf(id)});
+        int row = database.update("TASK", values, "ID=?", new String[]{id});  // id đã là String
         return row > 0;
     }
+
 
 }

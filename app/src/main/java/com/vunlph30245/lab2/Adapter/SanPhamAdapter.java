@@ -19,8 +19,7 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.vunlph30245.lab2.DAO.ToDoDAO;
-import com.vunlph30245.lab2.MainActivity;
+import com.google.firebase.firestore.FirebaseFirestore;
 import com.vunlph30245.lab2.Model.SanPhamModel;
 import com.vunlph30245.lab2.R;
 
@@ -29,12 +28,12 @@ import java.util.ArrayList;
 public class SanPhamAdapter extends RecyclerView.Adapter<SanPhamAdapter.ViewHolder> {
     Context context;
     ArrayList<SanPhamModel> list;
-    ToDoDAO toDoDAO;
+    FirebaseFirestore db;
 
     public SanPhamAdapter(Context context, ArrayList<SanPhamModel> list) {
         this.context = context;
         this.list = list;
-        toDoDAO = new ToDoDAO(context);
+        db = FirebaseFirestore.getInstance();
     }
 
     @NonNull
@@ -46,140 +45,132 @@ public class SanPhamAdapter extends RecyclerView.Adapter<SanPhamAdapter.ViewHold
 
     @Override
     public void onBindViewHolder(@NonNull ViewHolder holder, @SuppressLint("RecyclerView") int position) {
-        holder.tvContent.setText(list.get(position).getContent());
-        holder.tvDate.setText(list.get(position).getDate());
+        SanPhamModel item = list.get(position);
+        holder.tvContent.setText(item.getContent());
+        holder.tvDate.setText(item.getDate());
 
-        if (list.get(position).getStatus()==1){
+        // Hiển thị trạng thái hoàn thành
+        if (item.getStatus() == 1) {
             holder.chkTask.setChecked(true);
             holder.tvContent.setPaintFlags(holder.tvContent.getPaintFlags() | Paint.STRIKE_THRU_TEXT_FLAG);
-        }else {
+        } else {
             holder.chkTask.setChecked(false);
             holder.tvContent.setPaintFlags(holder.tvContent.getPaintFlags() & (~Paint.STRIKE_THRU_TEXT_FLAG));
-
         }
+
+        // Cập nhật trạng thái công việc
         holder.chkTask.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
             @Override
             public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
-                int id = list.get(holder.getAdapterPosition()).getId();
-                boolean checkRS = toDoDAO.updateStatus(id, holder.chkTask.isChecked());
-                if (checkRS){
-                    Toast.makeText(context, "Cap nhat thanh cong", Toast.LENGTH_SHORT).show();
-                }else {
-                    Toast.makeText(context, "Cap nhat that bai", Toast.LENGTH_SHORT).show();
-                }
-                list.clear();
-                list = toDoDAO.getListSanPham();
-                notifyDataSetChanged();
+                item.setStatus(isChecked ? 1 : 0);
+                db.collection("SanPham").document(item.getId())
+                        .update("status", item.getStatus())
+                        .addOnSuccessListener(aVoid -> {
+                            Toast.makeText(context, "Cập nhật trạng thái thành công", Toast.LENGTH_SHORT).show();
+                        })
+                        .addOnFailureListener(e -> {
+                            Toast.makeText(context, "Cập nhật trạng thái thất bại", Toast.LENGTH_SHORT).show();
+                        });
             }
         });
-            holder.imgDelete.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View v) {
-                    int id = list.get(holder.getAdapterPosition()).getId();
 
-                    AlertDialog.Builder builder = new AlertDialog.Builder(context);
-                    builder.setTitle("Xoa");
-                    builder.setIcon(R.drawable.delete);
-                    builder.setMessage("Ban co chac muon xoa");
-                    builder.setPositiveButton("Xoa", new DialogInterface.OnClickListener() {
-                        @Override
-                        public void onClick(DialogInterface dialog, int which) {
-                            boolean check = toDoDAO.removeTodo(id);
-                            if (check) {
-                                Toast.makeText(context.getApplicationContext(), "Xoa thanh cong", Toast.LENGTH_SHORT).show();
-                                list.remove(holder.getAdapterPosition());
-                                notifyItemRemoved(holder.getAdapterPosition());
-                            } else {
-                                Toast.makeText(context, "Xoa that bai", Toast.LENGTH_SHORT).show();
+        // Xóa công việc
+        holder.imgDelete.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                AlertDialog.Builder builder = new AlertDialog.Builder(context);
+                builder.setTitle("Xóa công việc")
+                        .setIcon(R.drawable.delete)
+                        .setMessage("Bạn có chắc chắn muốn xóa?")
+                        .setPositiveButton("Xóa", new DialogInterface.OnClickListener() {
+                            @Override
+                            public void onClick(DialogInterface dialog, int which) {
+                                db.collection("SanPham").document(item.getId())
+                                        .delete()
+                                        .addOnSuccessListener(aVoid -> {
+                                            Toast.makeText(context, "Xóa thành công", Toast.LENGTH_SHORT).show();
+                                            list.remove(position);
+                                            notifyItemRemoved(position);
+                                        })
+                                        .addOnFailureListener(e -> {
+                                            Toast.makeText(context, "Xóa thất bại", Toast.LENGTH_SHORT).show();
+                                        });
                             }
+                        })
+                        .setNegativeButton("Hủy", null)
+                        .create()
+                        .show();
+            }
+        });
 
-                        }
-                    });
+        // Cập nhật công việc
+        holder.imgUpdate.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                LayoutInflater inflater = ((Activity) context).getLayoutInflater();
+                View view = inflater.inflate(R.layout.custom_dialog, null);
+                AlertDialog.Builder builder = new AlertDialog.Builder(context);
+                builder.setView(view);
 
-                    builder.setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
-                        @Override
-                        public void onClick(DialogInterface dialog, int which) {
+                EditText edtId = view.findViewById(R.id.edtId);
+                EditText edtTitle = view.findViewById(R.id.edtTitle);
+                EditText edtContent = view.findViewById(R.id.edtContent);
+                EditText edtDate = view.findViewById(R.id.edtDate);
+                EditText edtType = view.findViewById(R.id.edtType);
 
-                        }
-                    });
-                    AlertDialog dialog = builder.create();
-                    dialog.show();
-                }
-            });
+                // Load dữ liệu vào dialog
+                edtId.setText(item.getId());
+                edtTitle.setText(item.getTitle());
+                edtContent.setText(item.getContent());
+                edtDate.setText(item.getDate());
+                edtType.setText(item.getType());
 
-            holder.imgUpdate.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View v) {
-                    LayoutInflater inflater = ((Activity)context).getLayoutInflater();
-                    View view = inflater.inflate(R.layout.custom_dialog, null);
-                    AlertDialog.Builder builder = new AlertDialog.Builder(context);
-                    builder.setView(view);
-                    EditText edtId, edtTitle, edtContent, edtDate, edtType;
-                    edtId = view.findViewById(R.id.edtId);
-                    edtTitle = view.findViewById(R.id.edtTitle);
-                    edtContent = view.findViewById(R.id.edtContent);
-                    edtDate = view.findViewById(R.id.edtDate);
-                    edtType = view.findViewById(R.id.edtType);
+                // Xử lý chọn loại công việc
+                edtType.setOnClickListener(new View.OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        String[] arrType = {"Dễ", "Trung bình", "Khó"};
+                        AlertDialog.Builder typeBuilder = new AlertDialog.Builder(context);
+                        typeBuilder.setTitle("Vui lòng chọn")
+                                .setItems(arrType, new DialogInterface.OnClickListener() {
+                                    @Override
+                                    public void onClick(DialogInterface dialog, int which) {
+                                        edtType.setText(arrType[which]);
+                                    }
+                                })
+                                .create()
+                                .show();
+                    }
+                });
 
-                    //load data
-                    edtId.setText(String.valueOf(list.get(position).getId()));
-                    edtTitle.setText(list.get(position).getTitle());
-                    edtContent.setText(list.get(position).getContent());
-                    edtDate.setText(list.get(position).getDate());
-                    edtType.setText(list.get(position).getType());
+                builder.setTitle("Cập nhật công việc")
+                        .setIcon(R.drawable.pencil)
+                        .setPositiveButton("Cập nhật", new DialogInterface.OnClickListener() {
+                            @Override
+                            public void onClick(DialogInterface dialog, int which) {
+                                // Lấy dữ liệu mới
+                                item.setTitle(edtTitle.getText().toString().trim());
+                                item.setContent(edtContent.getText().toString().trim());
+                                item.setDate(edtDate.getText().toString().trim());
+                                item.setType(edtType.getText().toString().trim());
 
-                    edtType.setOnClickListener(new View.OnClickListener() {
-                        @Override
-                        public void onClick(View v) {
-                            String[] arrType = {"De", "Trung binh", "Kho"};
-                            AlertDialog.Builder builder = new AlertDialog.Builder(context);
-                            builder.setTitle("Vui long chon");
-                            builder.setIcon(R.drawable.pencil);
-                            builder.setItems(arrType, new DialogInterface.OnClickListener() {
-                                @Override
-                                public void onClick(DialogInterface dialog, int which) {
-                                    edtType.setText(arrType[which]);
-                                }
-                            });
-                            AlertDialog alertDialog = builder.create();
-                            alertDialog.show();
-                        }
-                    });
-
-                    builder.setTitle("Cap nhat thong tin");
-                    builder.setIcon(R.drawable.pencil);
-                    builder.setPositiveButton("Update", new DialogInterface.OnClickListener() {
-                        @Override
-                        public void onClick(DialogInterface dialog, int which) {
-                            SanPhamModel sanPhamModel = new SanPhamModel();
-                            sanPhamModel.setId(Integer.parseInt(edtId.getText().toString().trim()));
-                            sanPhamModel.setTitle(edtTitle.getText().toString().trim());
-                            sanPhamModel.setContent(edtContent.getText().toString().trim());
-                            sanPhamModel.setDate(edtDate.getText().toString().trim());
-                            sanPhamModel.setType(edtType.getText().toString().trim());
-
-                            long check = toDoDAO.updateTodo(sanPhamModel);
-                            if (check < 0) {
-                                Toast.makeText(context, "Loi", Toast.LENGTH_SHORT).show();
-                            } else {
-                                Toast.makeText(context, "Cap nhat thanh cong", Toast.LENGTH_SHORT).show();
+                                // Cập nhật vào Firestore
+                                db.collection("SanPham").document(item.getId())
+                                        .set(item)
+                                        .addOnSuccessListener(aVoid -> {
+                                            Toast.makeText(context, "Cập nhật thành công", Toast.LENGTH_SHORT).show();
+                                            notifyItemChanged(position);
+                                        })
+                                        .addOnFailureListener(e -> {
+                                            Toast.makeText(context, "Cập nhật thất bại", Toast.LENGTH_SHORT).show();
+                                        });
                             }
-
-                            list.set(position, sanPhamModel);
-                            notifyItemChanged(holder.getAdapterPosition());
-                        }
-                    });
-
-                    builder.setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
-                        @Override
-                        public void onClick(DialogInterface dialog, int which) {
-
-                        }
-                    });
-                    AlertDialog dialog = builder.create();
-                    dialog.show();
-                }
-            });
+                        })
+                        .setNegativeButton("Hủy", null)
+                        .create()
+                        .show();
+            }
+        });
     }
 
     @Override
@@ -187,7 +178,7 @@ public class SanPhamAdapter extends RecyclerView.Adapter<SanPhamAdapter.ViewHold
         return list.size();
     }
 
-    public class ViewHolder extends RecyclerView.ViewHolder {
+    public static class ViewHolder extends RecyclerView.ViewHolder {
         TextView tvContent, tvDate;
         CheckBox chkTask;
         ImageView imgUpdate, imgDelete;
